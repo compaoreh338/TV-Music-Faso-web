@@ -68,15 +68,26 @@ export type Clip = {
   socialScore: number
 }
 
+export type ScheduleItem = {
+  clipId: string
+  position: number
+  isLocked: boolean
+  title: string
+  artist: string
+  origin: string
+}
+
+export type SchedulePlaylist = {
+  slot: string
+  slotLabel: string
+  sovereignty: number
+  items: ScheduleItem[]
+}
+
 export type Schedule = {
   date: string
   sovereignty: number
-  playlists: {
-    slot: string
-    slotLabel: string
-    sovereignty: number
-    items: { position: number; isLocked: boolean; title: string; artist: string; origin: string }[]
-  }[]
+  playlists: SchedulePlaylist[]
 }
 
 export type Dashboard = {
@@ -101,9 +112,16 @@ export type Dashboard = {
   genres: { label: string; count: number }[]
 }
 
+export type BbdaQuery =
+  | { year: number; month: number }
+  | { from: string; to: string }
+
 export type BbdaReport = {
   year: number
   month: number
+  from?: string
+  to?: string
+  period?: string
   count: number
   sovereignty: number
   canExport: boolean
@@ -199,7 +217,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   headers.set('Accept', 'application/json')
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
-  if (init.body) headers.set('Content-Type', 'application/json')
+  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
 
   const response = await fetch(path, { ...init, headers })
   if (response.status === 401) {
@@ -222,6 +240,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return undefined as T
   }
   return parseJson<T>(response)
+}
+
+function bbdaParams(query: BbdaQuery) {
+  if ('from' in query) {
+    return `from=${query.from}&to=${query.to}`
+  }
+  return `year=${query.year}&month=${query.month}`
 }
 
 export async function downloadFile(path: string, filename: string) {
@@ -264,11 +289,32 @@ export const api = {
   updateClip: (clip: Clip) =>
     request<Clip>(`/api/clips/${clip.id}`, { method: 'PUT', body: JSON.stringify(clip) }),
   deleteClip: (id: string) => request<void>(`/api/clips/${id}`, { method: 'DELETE' }),
+  clipsCsvUrl: () => '/api/clips.csv',
+  importClipsCsv: (csv: string) =>
+    request<{ imported: number }>('/api/clips/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      body: csv,
+    }),
   schedule: (date: string) => request<Schedule>(`/api/schedules?date=${date}`),
   generate: (date: string, thematic: boolean, preset: string) =>
     request<Schedule>('/api/schedules/generate', {
       method: 'POST',
       body: JSON.stringify({ date, thematic, preset }),
+    }),
+  saveSchedule: (schedule: Schedule) =>
+    request<Schedule>('/api/schedules', {
+      method: 'PUT',
+      body: JSON.stringify({
+        date: schedule.date,
+        playlists: schedule.playlists.map((playlist) => ({
+          slot: playlist.slot,
+          items: playlist.items.map((item) => ({
+            clipId: item.clipId,
+            isLocked: item.isLocked,
+          })),
+        })),
+      }),
     }),
   lock: (date: string, slot: string, position: number) =>
     request<Schedule>('/api/schedules/lock', {
@@ -280,10 +326,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ date }),
     }),
-  bbda: (year: number, month: number) =>
-    request<BbdaReport>(`/api/reports/bbda?year=${year}&month=${month}`),
-  bbdaCsvUrl: (year: number, month: number) =>
-    `/api/reports/bbda.csv?year=${year}&month=${month}`,
+  bbda: (query: BbdaQuery) =>
+    request<BbdaReport>(`/api/reports/bbda?${bbdaParams(query)}`),
+  bbdaCsvUrl: (query: BbdaQuery) =>
+    `/api/reports/bbda.csv?${bbdaParams(query)}`,
   exportUrl: (format: string, date: string) => `/api/export/${format}?date=${date}`,
   security: () => request<SecurityInfo>('/api/security'),
   backup: () => request<{ path: string }>('/api/backup', { method: 'POST' }),

@@ -81,7 +81,7 @@ export default function App() {
     { id: 'export', label: 'Export playout', visible: session.canExport },
     { id: 'reports', label: 'Historique BBDA' },
     { id: 'security', label: 'Sécurité / audit' },
-    { id: 'constraints', label: 'Contraintes §5' },
+    { id: 'constraints', label: 'Contraintes' },
   ]
 
   return (

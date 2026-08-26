@@ -13,24 +13,24 @@ export default function ConstraintsPage() {
   if (!data) return <p className="muted">Chargement…</p>
 
   return (
-    <div style={{ maxWidth: 880 }}>
+    <div className="constraints-board">
       <article className="card">
         <div className="kicker">COUCHE DONNÉES</div>
-        <h2>Stockage actif</h2>
+        <h2 style={{ margin: '8px 0 0' }}>Stockage actif</h2>
         <p className="gold" style={{ fontSize: 20 }}>{data.platform}</p>
         <p>{data.details}</p>
         <p className="muted">Stock actuel : {data.clipCount} clips</p>
         <p className="muted">SQLite n&apos;est plus utilisé. La base unique est PostgreSQL (Docker : tvmusicfaso).</p>
       </article>
       {data.rows.map((row) => (
-        <article className="card" key={row.title} style={{ marginTop: 12 }}>
+        <article className="card" key={row.title}>
           <strong>{row.title}</strong>
-          <p className="muted">{row.guarantee}</p>
+          <p className="muted" style={{ marginBottom: 0 }}>{row.guarantee}</p>
         </article>
       ))}
-      <article className="card" style={{ marginTop: 16 }}>
+      <article className="card">
         <div className="kicker">RÈGLES PAR TRANCHE</div>
-        {data.slots.map((slot) => <p key={slot}>{slot}</p>)}
+        {data.slots.map((slot) => <p key={slot} style={{ margin: '8px 0' }}>{slot}</p>)}
       </article>
     </div>
   )
