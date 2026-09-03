@@ -35,6 +35,13 @@ export default function Login({
           }
         }}
       >
+        <img
+          className="login-logo"
+          src="/filinfo-logo.png"
+          alt="fil infos"
+          width={140}
+          height={85}
+        />
         <div className="kicker">FILINFO GROUP · RÉGIE</div>
         <h1>Connexion</h1>
         <p className="muted">Saisissez votre identifiant nominatif pour accéder à la régie.</p>

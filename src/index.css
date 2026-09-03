@@ -62,6 +62,17 @@ input, select, textarea { font: inherit; color: var(--text); }
 
 .sidebar-top { padding: 22px 20px 18px; }
 .brand-row { display: flex; gap: 10px; align-items: center; }
+.brand-logo {
+  display: block;
+  width: 118px;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px 6px;
+  box-sizing: content-box;
+}
 .flags { display: flex; height: 28px; }
 .flag { width: 7px; height: 28px; }
 .brand { color: #f0c14b; font-weight: 700; letter-spacing: 0.6px; font-size: 14px; }
@@ -268,6 +279,17 @@ input, select, textarea { font: inherit; color: var(--text); }
   z-index: 2;
 }
 .login-card { width: min(420px, 92vw); color: #f4f6f8; }
+.login-logo {
+  display: block;
+  width: 140px;
+  height: auto;
+  margin: 0 0 12px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  padding: 10px 8px;
+  box-sizing: content-box;
+}
 .login-card .field input { background: #0f1620; color: #f4f6f8; }
 
 table { width: 100%; border-collapse: collapse; font-size: 14px; }

@@ -105,15 +105,13 @@ export default function App() {
       <aside className={`sidebar${menuOpen ? ' open' : ''}`} id="regie-menu">
         <div className="sidebar-top">
           <div className="brand-row">
-            <div className="flags" aria-hidden="true">
-              <span className="flag" style={{ background: '#C41E3A' }} />
-              <span className="flag" style={{ background: '#F0C14B' }} />
-              <span className="flag" style={{ background: '#3CB371' }} />
-            </div>
-            <div>
-              <div className="brand">TV-MUSIC FASO</div>
-              <div className="muted" style={{ color: '#8e99a6', fontSize: 11 }}>Filinfo Group</div>
-            </div>
+            <img
+              className="brand-logo"
+              src="/filinfo-logo.png"
+              alt="fil infos"
+              width={118}
+              height={72}
+            />
           </div>
           <div className="kicker">RÉGIE</div>
         </div>
