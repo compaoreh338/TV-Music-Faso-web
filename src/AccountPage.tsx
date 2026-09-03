@@ -44,12 +44,16 @@ export default function AccountPage({
             </div>
           </fieldset>
           {!editing ? (
-            <button type="button" className="btn" onClick={() => setEditing(true)}>Éditer</button>
+            <button type="button" className="icon-btn primary" title="Éditer" aria-label="Éditer" onClick={() => setEditing(true)}>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 11.5V14h2.5L12.2 6.3 9.7 3.8 2 11.5zm11.1-6.1 1.5-1.5c.4-.4.4-1.1 0-1.5L13.6 1.4c-.4-.4-1.1-.4-1.5 0L10.6 2.9l2.5 2.5z" /></svg>
+            </button>
           ) : (
             <div className="toolbar">
               <button
                 type="button"
-                className="btn"
+                className="icon-btn primary"
+                title="Enregistrer"
+                aria-label="Enregistrer"
                 onClick={async () => {
                   setError('')
                   try {
@@ -62,18 +66,20 @@ export default function AccountPage({
                   }
                 }}
               >
-                Enregistrer
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8.2 5.6 13 15 2.4 13.5 1 5.6 10 2.4 6.7z" /></svg>
               </button>
               <button
                 type="button"
-                className="btn ghost"
+                className="icon-btn ghost"
+                title="Annuler"
+                aria-label="Annuler"
                 onClick={() => {
                   setFullName(session.fullName)
                   setUserName(session.userName)
                   setEditing(false)
                 }}
               >
-                Annuler
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.2.4 6 5.2 10.8.4 12 1.6 7.2 6.4 12 11.2 10.8 12.4 6 7.6 1.2 12.4 0 11.2 4.8 6.4 0 1.6z" /></svg>
               </button>
             </div>
           )}

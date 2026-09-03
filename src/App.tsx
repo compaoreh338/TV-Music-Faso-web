@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, setToken, type PageId, type Session } from './api'
+import { api, getRootToken, setRootToken, setToken, type PageId, type Session } from './api'
 import Login from './Login'
 import DashboardPage from './DashboardPage'
 import LibraryPage from './LibraryPage'
@@ -9,15 +9,19 @@ import ReportsPage from './ReportsPage'
 import SecurityPage from './SecurityPage'
 import ConstraintsPage from './ConstraintsPage'
 import AccountPage from './AccountPage'
+import UsersPage from './UsersPage'
+import ConfirmDialog from './ConfirmDialog'
 
 const TITLES: Record<PageId, string> = {
   dashboard: 'Tableau de bord',
   library: 'Médiathèque',
+  hits: 'Hits',
   programming: 'Moteur de programmation',
   export: 'Export playout',
   reports: 'Historique et BBDA',
   security: 'Sécurité et audit',
   constraints: 'Contraintes techniques',
+  users: 'Utilisateurs',
   account: 'Mon compte',
 }
 
@@ -33,6 +37,7 @@ export default function App() {
     localStorage.getItem('tvmusic.theme') === 'light' ? 'light' : 'dark')
   const [error, setError] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
   const goTo = (next: PageId) => {
     setError('')
@@ -77,11 +82,13 @@ export default function App() {
   const items: { id: PageId; label: string; visible?: boolean }[] = [
     { id: 'dashboard', label: 'Tableau de bord' },
     { id: 'library', label: 'Médiathèque' },
+    { id: 'hits', label: 'Hits' },
     { id: 'programming', label: 'Programmation' },
     { id: 'export', label: 'Export playout', visible: session.canExport },
     { id: 'reports', label: 'Historique BBDA' },
     { id: 'security', label: 'Sécurité / audit' },
     { id: 'constraints', label: 'Contraintes' },
+    { id: 'users', label: 'Utilisateurs', visible: session.canManageUsers },
   ]
 
   return (
@@ -125,8 +132,38 @@ export default function App() {
         <div className="sidebar-account">
           <div style={{ fontWeight: 600, fontSize: 13 }}>{session.fullName} · {session.role}</div>
           <div className="muted" style={{ color: '#8e99a6', fontSize: 12, margin: '6px 0 8px' }}>
-            {session.consultationOnly ? 'Consultation seule' : 'Édition programmateur'}
+            {session.isImpersonating
+              ? `Vue ${session.role} — via ${session.impersonatedBy ?? 'Direction'}`
+              : session.consultationOnly ? 'Consultation seule' : 'Édition programmateur'}
           </div>
+          {session.isImpersonating && (
+            <button
+              type="button"
+              className="btn primary"
+              style={{ width: '100%', marginBottom: 8 }}
+              onClick={async () => {
+                const root = getRootToken()
+                await api.logout().catch(() => undefined)
+                if (!root) {
+                  setToken(null)
+                  setSession(null)
+                  return
+                }
+                setToken(root)
+                setRootToken(null)
+                try {
+                  const next = await api.me()
+                  setSession(next)
+                  setPage(next.canManageUsers ? 'users' : 'dashboard')
+                } catch {
+                  setToken(null)
+                  setSession(null)
+                }
+              }}
+            >
+              Revenir à Direction
+            </button>
+          )}
           <button
             type="button"
             className={`nav-btn${page === 'account' ? ' active' : ''}`}
@@ -137,12 +174,7 @@ export default function App() {
           <button
             type="button"
             className="btn ghost"
-            onClick={async () => {
-              await api.logout().catch(() => undefined)
-              setMenuOpen(false)
-              setToken(null)
-              setSession(null)
-            }}
+            onClick={() => setConfirmLogout(true)}
           >
             Déconnexion
           </button>
@@ -181,12 +213,24 @@ export default function App() {
         <main className="page">
           {error && <p className="alert">{error}</p>}
           {page === 'dashboard' && <DashboardPage />}
-          {page === 'library' && <LibraryPage canEdit={session.canEditLibrary} />}
+          {page === 'library' && <LibraryPage canEdit={session.canEditLibrary} canValidate={session.canValidateClips} />}
+          {page === 'hits' && <LibraryPage canEdit={session.canEditLibrary} canValidate={session.canValidateClips} hitsOnlyMode />}
           {page === 'programming' && <ProgrammingPage canEdit={session.canEditPlaylists} />}
           {page === 'export' && <ExportPage canExport={session.canExport} />}
           {page === 'reports' && <ReportsPage canExport={session.canExportBbda} />}
           {page === 'security' && <SecurityPage />}
           {page === 'constraints' && <ConstraintsPage />}
+          {page === 'users' && session.canManageUsers && (
+            <UsersPage
+              session={session}
+              onImpersonate={(next) => {
+                setRootToken(session.token)
+                setToken(next.token)
+                setSession({ ...next, isImpersonating: true, impersonatedBy: session.fullName })
+                setPage(next.canEditLibrary ? 'library' : 'dashboard')
+              }}
+            />
+          )}
           {page === 'account' && (
             <AccountPage
               session={session}
@@ -197,6 +241,28 @@ export default function App() {
           )}
         </main>
       </div>
+      {confirmLogout && (
+        <ConfirmDialog
+          kicker="CONFIRMER LA DÉCONNEXION"
+          title="Se déconnecter de TV-Music Faso ?"
+          message="Vous devrez saisir à nouveau vos identifiants pour revenir dans l’application."
+          confirmLabel="Déconnexion"
+          onCancel={() => setConfirmLogout(false)}
+          onConfirm={async () => {
+            setConfirmLogout(false)
+            setMenuOpen(false)
+            const root = getRootToken()
+            await api.logout().catch(() => undefined)
+            if (root) {
+              setToken(root)
+              await api.logout().catch(() => undefined)
+            }
+            setRootToken(null)
+            setToken(null)
+            setSession(null)
+          }}
+        />
+      )}
     </div>
   )
 }

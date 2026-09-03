@@ -86,10 +86,10 @@ export default function ReportsPage({ canExport }: { canExport: boolean }) {
             <button
               className="icon-btn primary"
               type="button"
-              title="Exporter le rapport BBDA"
-              aria-label="Exporter le rapport BBDA"
+              title="Exporter le relevé BBDA (PDF)"
+              aria-label="Exporter le relevé BBDA PDF"
               onClick={() =>
-                downloadFile(api.bbdaCsvUrl(query), `BBDA-${fileStamp}.csv`).catch((err: Error) =>
+                downloadFile(api.bbdaPdfUrl(query), `BBDA-${fileStamp}.pdf`).catch((err: Error) =>
                   setError(err.message),
                 )
               }

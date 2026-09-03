@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, downloadFile, emptyClip, type Clip, type Lookups } from './api'
+import { api, downloadFile, emptyClip, isClipHit, isClipPending, type Clip, type Lookups } from './api'
+import ConfirmDialog from './ConfirmDialog'
 
 const FORMATS = ['MP4', 'MOV', 'MKV', 'AVI']
 
-export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
+export default function LibraryPage({
+  canEdit,
+  canValidate = false,
+  hitsOnlyMode = false,
+}: {
+  canEdit: boolean
+  canValidate?: boolean
+  hitsOnlyMode?: boolean
+}) {
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [clips, setClips] = useState<Clip[]>([])
   const [selected, setSelected] = useState<Clip | null>(null)
@@ -13,16 +22,23 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
   const [genre, setGenre] = useState('')
   const [language, setLanguage] = useState('')
   const [burkinabeOnly, setBurkinabeOnly] = useState(false)
+  const [hitsOnly, setHitsOnly] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [newLanguage, setNewLanguage] = useState('')
   const [error, setError] = useState('')
   const [panelOpen, setPanelOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Clip | null>(null)
+  const [mediaUrl, setMediaUrl] = useState('')
+  const [mediaError, setMediaError] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
 
   const load = () =>
     api.clips(query, genre, language, burkinabeOnly)
       .then((rows) => {
-        setClips(rows)
-        setSelected((current) => rows.find((row) => row.id === current?.id) ?? null)
+        const filtered = (hitsOnlyMode || hitsOnly) ? rows.filter(isClipHit) : rows
+        setClips(filtered)
+        setSelected((current) => filtered.find((row) => row.id === current?.id) ?? null)
+        setSelectedIds((current) => current.filter((id) => filtered.some((row) => row.id === id && isClipPending(row))))
       })
       .catch((err: Error) => setError(err.message))
 
@@ -32,11 +48,36 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
 
   useEffect(() => {
     load()
-  }, [query, genre, language, burkinabeOnly])
+  }, [query, genre, language, burkinabeOnly, hitsOnly, hitsOnlyMode])
 
   useEffect(() => {
     if (!editing) setDraft(selected)
   }, [selected, editing])
+
+  useEffect(() => {
+    let objectUrl = ''
+    const id = selected?.id
+    if (!id) {
+      setMediaUrl('')
+      setMediaError('')
+      return
+    }
+
+    setMediaError('')
+    api.clipMedia(id)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob)
+        setMediaUrl(objectUrl)
+      })
+      .catch((err: Error) => {
+        setMediaUrl('')
+        setMediaError(err.message)
+      })
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [selected?.id])
 
   const form = editing ? draft : selected
 
@@ -60,6 +101,29 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
     }
   }
 
+  const pendingClips = clips.filter(isClipPending)
+  const allPendingSelected = pendingClips.length > 0 && pendingClips.every((clip) => selectedIds.includes(clip.id))
+
+  const toggleSelected = (clip: Clip, checked: boolean) => {
+    if (!isClipPending(clip)) return
+    setSelectedIds((current) => checked ? [...new Set([...current, clip.id])] : current.filter((id) => id !== clip.id))
+  }
+
+  const applyBulk = async (action: 'validate' | 'reject') => {
+    if (selectedIds.length === 0) return
+    setError('')
+    try {
+      for (const id of selectedIds) {
+        if (action === 'validate') await api.validateClip(id)
+        else await api.rejectClip(id)
+      }
+      setSelectedIds([])
+      await load()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
   return (
     <>
       <div className="toolbar library">
@@ -77,11 +141,18 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
             <input type="checkbox" checked={burkinabeOnly} onChange={(e) => setBurkinabeOnly(e.target.checked)} />
             Burkinabè
           </label>
-          <button type="button" className="btn ghost" onClick={() => { setQuery(''); setGenre(''); setLanguage(''); setBurkinabeOnly(false) }}>
+          {!hitsOnlyMode && (
+            <label className="row-check" title="Afficher uniquement les clips Hit (Premium / Hit, ou score d'impact ≥ 4,5)">
+              <input type="checkbox" checked={hitsOnly} onChange={(e) => setHitsOnly(e.target.checked)} />
+              Hits
+            </label>
+          )}
+          <button type="button" className="btn ghost" onClick={() => { setQuery(''); setGenre(''); setLanguage(''); setBurkinabeOnly(false); setHitsOnly(false) }}>
             Réinitialiser
           </button>
         </div>
         <div className="toolbar-actions">
+          {!hitsOnlyMode && (
           <button
             type="button"
             className="icon-btn primary"
@@ -130,6 +201,7 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
           >
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v9M5 7l3 4 3-4M2 13h12v2H2z" /></svg>
           </button>
+          )}
           <button
             type="button"
             className="icon-btn"
@@ -146,21 +218,76 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
         </div>
       </div>
 
-      {!canEdit && (
+      {hitsOnlyMode && (
+        <p className="gold">Onglet Hits : titres Premium / Hit (case cochée) ou score d’impact ≥ 4,5. Vous pouvez les consulter, les modifier et les valider ici.</p>
+      )}
+      {!canEdit && !hitsOnlyMode && (
         <p className="gold">Consultation seule : l&apos;édition de la médiathèque est réservée aux programmateurs.</p>
       )}
       {error && <p className="alert">{error}</p>}
 
       <div className={panelOpen ? 'split' : 'split catalog-only'}>
         <article className="card">
-          <div className="kicker">CATALOGUE</div>
-          <p className="muted">{clips.length} clip(s)</p>
+          <div className="kicker">{hitsOnlyMode ? 'HITS' : 'CATALOGUE'}</div>
+          <p className="muted">{clips.length} {hitsOnlyMode ? 'hit(s)' : 'clip(s)'}</p>
+          {canValidate && (
+            <div className="bulk-bar">
+              <label className="row-check">
+                <input
+                  type="checkbox"
+                  checked={allPendingSelected}
+                  disabled={pendingClips.length === 0}
+                  onChange={(e) => setSelectedIds(e.target.checked ? pendingClips.map((clip) => clip.id) : [])}
+                />
+                Tout cocher (à valider)
+              </label>
+              <span className="muted">{selectedIds.length} sélectionné(s)</span>
+              <button
+                type="button"
+                className="icon-btn primary"
+                title="Valider la sélection"
+                aria-label="Valider la sélection"
+                disabled={selectedIds.length === 0}
+                onClick={() => applyBulk('validate')}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8.2 5.6 13 15 2.4 13.5 1 5.6 10 2.4 6.7z" /></svg>
+              </button>
+              <button
+                type="button"
+                className="icon-btn danger"
+                title="Refuser la sélection"
+                aria-label="Refuser la sélection"
+                disabled={selectedIds.length === 0}
+                onClick={() => applyBulk('reject')}
+              >
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.2.4 6 5.2 10.8.4 12 1.6 7.2 6.4 12 11.2 10.8 12.4 6 7.6 1.2 12.4 0 11.2 4.8 6.4 0 1.6z" /></svg>
+              </button>
+            </div>
+          )}
           <ul className="list">
             {clips.map((clip) => (
               <li key={clip.id} className={selected?.id === clip.id && panelOpen ? 'selected' : ''}>
-                <strong>{clip.title}</strong>
+                <div className="list-row-head">
+                  {canValidate && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(clip.id)}
+                      disabled={!isClipPending(clip)}
+                      title="Sélectionner pour validation groupée"
+                      onChange={(e) => toggleSelected(clip, e.target.checked)}
+                    />
+                  )}
+                  {isClipHit(clip) ? (
+                    <span className="hit-badge" title={clip.impactLabel} aria-label={clip.impactLabel}>
+                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.2 9.8 5.9l5 .3-3.8 2.8 1.4 4.8L8 11.5 3.6 13.8 5 9l-3.8-2.8 5-.3z" /></svg>
+                    </span>
+                  ) : (
+                    <span className="hit-badge hit-badge--empty" aria-hidden="true" />
+                  )}
+                  <strong>{clip.title}</strong>
+                </div>
                 <div className="muted">{clip.artist} · {clip.languageLabel} · {clip.genreLabel}</div>
-                <div className="gold">{clip.originLabel}</div>
+                <div className="gold">{clip.validationLabel || clip.originLabel}</div>
                 <div className="list-actions">
                   <button
                     type="button"
@@ -235,7 +362,7 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
                           }
                         }}
                       >
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h9l3 3v9H2V2zm2 0h6v4H4V2zm0 7h8v4H4V9z" /></svg>
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8.2 5.6 13 15 2.4 13.5 1 5.6 10 2.4 6.7z" /></svg>
                       </button>
                       <button type="button" className="icon-btn ghost" title="Annuler" aria-label="Annuler" onClick={() => { setEditing(false); setDraft(selected) }}>
                         <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.2.4 6 5.2 10.8.4 12 1.6 7.2 6.4 12 11.2 10.8 12.4 6 7.6 1.2 12.4 0 11.2 4.8 6.4 0 1.6z" /></svg>
@@ -253,6 +380,59 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
                 </div>
               </div>
 
+              <div className="kicker">LECTEUR</div>
+              <p className="gold">Visionnez le clip avant de valider.</p>
+              {mediaUrl ? (
+                <video
+                  key={mediaUrl}
+                  controls
+                  src={mediaUrl}
+                  style={{ width: '100%', maxHeight: 280, background: '#05080C', borderRadius: 10 }}
+                />
+              ) : (
+                <p className="muted">{mediaError || 'Aucun fichier vidéo lisible pour cette fiche.'}</p>
+              )}
+
+              {canValidate && form.id && isClipPending(form) && !editing && (
+                <div className="bulk-bar" style={{ marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className="icon-btn primary"
+                    title="Valider pour la programmation"
+                    aria-label="Valider pour la programmation"
+                    onClick={async () => {
+                      setError('')
+                      try {
+                        const saved = await api.validateClip(form.id)
+                        setSelected(saved)
+                        await load()
+                      } catch (err) {
+                        setError((err as Error).message)
+                      }
+                    }}
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8.2 5.6 13 15 2.4 13.5 1 5.6 10 2.4 6.7z" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn danger"
+                    title="Refuser"
+                    aria-label="Refuser"
+                    onClick={async () => {
+                      setError('')
+                      try {
+                        const saved = await api.rejectClip(form.id)
+                        setSelected(saved)
+                        await load()
+                      } catch (err) {
+                        setError((err as Error).message)
+                      }
+                    }}
+                  >
+                    <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.2.4 6 5.2 10.8.4 12 1.6 7.2 6.4 12 11.2 10.8 12.4 6 7.6 1.2 12.4 0 11.2 4.8 6.4 0 1.6z" /></svg>
+                  </button>
+                </div>
+              )}
               <fieldset disabled={!canEdit || !editing} style={{ border: 0, padding: 0 }}>
                 <div className="field"><label>Titre</label><input value={form.title} onChange={(e) => patch({ title: e.target.value })} /></div>
                 <div className="field"><label>Artiste</label><input value={form.artist} onChange={(e) => patch({ artist: e.target.value })} /></div>
@@ -283,9 +463,54 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
                 </div>
                 <div className="field">
                   <label>Langue</label>
-                  <select value={form.language} onChange={(e) => patch({ language: e.target.value })}>
-                    {lookups?.languages.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  <select
+                    value={form.languageName || form.languageLabel || form.language}
+                    onChange={(e) => {
+                      const option = lookups?.languages.find((item) => item.value === e.target.value)
+                      patch({
+                        language: option?.enumValue || 'Autre',
+                        languageName: e.target.value,
+                        languageLabel: e.target.value,
+                      })
+                    }}
+                  >
+                    {lookups?.languages.map((item) => <option key={item.code || item.value} value={item.value}>{item.label}</option>)}
                   </select>
+                  {canEdit && editing && (
+                    <div className="row-check" style={{ marginTop: 8, gap: 8 }}>
+                      <input
+                        placeholder="Langue absente ? Ajoutez-la"
+                        value={newLanguage}
+                        onChange={(e) => setNewLanguage(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="icon-btn ghost"
+                        title="Ajouter la langue"
+                        aria-label="Ajouter la langue"
+                        onClick={async () => {
+                          const label = newLanguage.trim()
+                          if (label.length < 2) return
+                          setError('')
+                          try {
+                            const added = await api.addLanguage(label)
+                            const next = await api.lookups()
+                            setLookups(next)
+                            patch({
+                              language: added.enumValue,
+                              languageName: added.label,
+                              languageLabel: added.label,
+                            })
+                            setNewLanguage('')
+                          } catch (err) {
+                            setError((err as Error).message)
+                          }
+                        }}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 1h2v6h6v2H9v6H7V9H1V7h6z" /></svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="field">
                   <label>Thème</label>
@@ -305,7 +530,20 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
                 <div className="field"><label>Réseaux sociaux (1–5)</label><input type="number" step="0.1" value={form.socialScore} onChange={(e) => patch({ socialScore: Number(e.target.value) })} /></div>
                 <p className="gold">{form.impactLabel}</p>
                 <label className="row-check"><input type="checkbox" checked={form.isBurkinabe} onChange={(e) => patch({ isBurkinabe: e.target.checked })} /> Clip burkinabè</label>
-                <label className="row-check"><input type="checkbox" checked={form.isPremium} onChange={(e) => patch({ isPremium: e.target.checked })} /> Premium / Hit</label>
+                <label className="row-check">
+                  <input
+                    type="checkbox"
+                    checked={form.isPremium}
+                    onChange={(e) => patch({
+                      isPremium: e.target.checked,
+                      isHit: e.target.checked || form.impactScore >= 4.5,
+                      impactLabel: (e.target.checked || form.impactScore >= 4.5)
+                        ? `Hit ${form.impactScore.toFixed(1)}`
+                        : `Score ${form.impactScore.toFixed(1)}`,
+                    })}
+                  />
+                  Premium / Hit
+                </label>
                 <label className="row-check"><input type="checkbox" checked={form.isMorallyCompliant} onChange={(e) => patch({ isMorallyCompliant: e.target.checked })} /> Conforme moralement</label>
               </fieldset>
             </>
@@ -316,23 +554,14 @@ export default function LibraryPage({ canEdit }: { canEdit: boolean }) {
       <p className="muted">Stock : {clips.length} clips dans la médiathèque</p>
 
       {pendingDelete && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setPendingDelete(null)}>
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-clip-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="kicker">CONFIRMER LA SUPPRESSION</div>
-            <h2 id="delete-clip-title" style={{ margin: '8px 0 0' }}>Supprimer ce clip de la médiathèque ?</h2>
-            <p className="muted">« {pendingDelete.title} » sera retiré définitivement du catalogue.</p>
-            <div className="modal-actions">
-              <button type="button" className="btn ghost" onClick={() => setPendingDelete(null)}>Annuler</button>
-              <button type="button" className="btn danger" onClick={confirmDelete}>Supprimer</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          kicker="CONFIRMER LA SUPPRESSION"
+          title="Supprimer ce clip de la médiathèque ?"
+          message={`« ${pendingDelete.title} » sera retiré définitivement du catalogue.`}
+          confirmLabel="Supprimer"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+        />
       )}
     </>
   )

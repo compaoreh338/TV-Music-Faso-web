@@ -231,6 +231,18 @@ input, select, textarea { font: inherit; color: var(--text); }
 .icon-btn.compact { width: 32px; height: 30px; }
 .icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .list li strong { display: block; margin-bottom: 6px; }
+.list-row-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.list-row-head strong { margin-bottom: 0; flex: 1; }
+.hit-badge { width: 18px; height: 18px; flex-shrink: 0; color: var(--gold); margin-top: 1px; }
+.hit-badge svg { display: block; width: 18px; height: 18px; fill: currentColor; }
+.hit-badge--empty { visibility: hidden; }
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .field label, .field-label { color: var(--muted); font-size: 12px; }
 .field input, .field select, .toolbar input, .toolbar select, textarea {

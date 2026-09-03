@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type Clip, type Lookups, type Schedule, type ScheduleItem } from './api'
+import ConfirmDialog from './ConfirmDialog'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -35,6 +36,7 @@ export default function ProgrammingPage({ canEdit }: { canEdit: boolean }) {
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [baseline, setBaseline] = useState<Schedule | null>(null)
+  const [pendingRemove, setPendingRemove] = useState<ScheduleItem | null>(null)
 
   useEffect(() => {
     api.lookups().then((data) => {
@@ -223,10 +225,7 @@ export default function ProgrammingPage({ canEdit }: { canEdit: boolean }) {
                         title="Retirer de la playlist"
                         aria-label="Retirer de la playlist"
                         disabled={!canEdit || item.isLocked}
-                        onClick={() => updatePlaylist(
-                          playlist.items.filter((row) => row.position !== item.position),
-                          'Clip retiré de la tranche.',
-                        )}
+                        onClick={() => setPendingRemove(item)}
                       >
                         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1h4l1 2h4v2H1V3h5l1-2zM3.5 6h9l-.6 9h-7.8L3.5 6z" /></svg>
                       </button>
@@ -283,6 +282,24 @@ export default function ProgrammingPage({ canEdit }: { canEdit: boolean }) {
           </ul>
         </article>
       </div>
+
+      {pendingRemove && playlist && (
+        <ConfirmDialog
+          kicker="CONFIRMER LE RETRAIT"
+          title="Retirer ce clip de la playlist ?"
+          message={`« ${pendingRemove.title} » de ${pendingRemove.artist} sera enlevé de cette tranche uniquement, pas de la médiathèque.`}
+          confirmLabel="Retirer"
+          onCancel={() => setPendingRemove(null)}
+          onConfirm={async () => {
+            const item = pendingRemove
+            setPendingRemove(null)
+            await updatePlaylist(
+              playlist.items.filter((row) => row.position !== item.position),
+              'Clip retiré de la tranche.',
+            )
+          }}
+        />
+      )}
     </>
   )
 }

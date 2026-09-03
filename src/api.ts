@@ -1,13 +1,16 @@
 const TOKEN_KEY = 'tvmusic.token'
+const ROOT_TOKEN_KEY = 'tvmusic.rootToken'
 
 export type PageId =
   | 'dashboard'
   | 'library'
+  | 'hits'
   | 'programming'
   | 'export'
   | 'reports'
   | 'security'
   | 'constraints'
+  | 'users'
   | 'account'
 
 export type Session = {
@@ -22,10 +25,14 @@ export type Session = {
   canViewReports: boolean
   canExportBbda: boolean
   canManageBackup: boolean
+  canValidateClips: boolean
+  canManageUsers?: boolean
   consultationOnly: boolean
+  isImpersonating?: boolean
+  impersonatedBy?: string
 }
 
-export type Option = { value: string; label: string }
+export type Option = { value: string; label: string; enumValue?: string; code?: string }
 
 export type Lookups = {
   genres: Option[]
@@ -35,6 +42,17 @@ export type Lookups = {
   qualities: Option[]
   slots: Option[]
   presets: { name: string }[]
+}
+
+export const HIT_THRESHOLD = 4.5
+
+export function isClipHit(clip: Pick<Clip, 'isHit' | 'impactScore' | 'isPremium'>): boolean {
+  return clip.isPremium === true || clip.isHit === true || clip.impactScore >= HIT_THRESHOLD
+}
+
+export function isClipPending(clip: Pick<Clip, 'validationStatus' | 'isValidated'>): boolean {
+  if (clip.validationStatus) return clip.validationStatus === 'Pending'
+  return clip.isValidated !== true
 }
 
 export type Clip = {
@@ -52,6 +70,7 @@ export type Clip = {
   genre: string
   genreLabel: string
   language: string
+  languageName?: string
   languageLabel: string
   theme: string
   themeLabel: string
@@ -61,11 +80,15 @@ export type Clip = {
   impactLabel: string
   originLabel: string
   isPremium: boolean
+  isHit: boolean
   isMorallyCompliant: boolean
   filePath: string
   committeeRating: number
   popularityScore: number
   socialScore: number
+  validationStatus?: string
+  validationLabel?: string
+  isValidated?: boolean
 }
 
 export type ScheduleItem = {
@@ -164,6 +187,15 @@ export function setToken(token: string | null) {
   else sessionStorage.removeItem(TOKEN_KEY)
 }
 
+export function getRootToken(): string | null {
+  return sessionStorage.getItem(ROOT_TOKEN_KEY)
+}
+
+export function setRootToken(token: string | null) {
+  if (token) sessionStorage.setItem(ROOT_TOKEN_KEY, token)
+  else sessionStorage.removeItem(ROOT_TOKEN_KEY)
+}
+
 export function emptyClip(): Clip {
   return {
     id: '',
@@ -180,6 +212,7 @@ export function emptyClip(): Clip {
     genre: 'AfroPop',
     genreLabel: 'Afro-pop',
     language: 'Moore',
+    languageName: 'Mooré',
     languageLabel: 'Mooré',
     theme: 'Amour',
     themeLabel: 'Amour',
@@ -189,11 +222,15 @@ export function emptyClip(): Clip {
     impactLabel: 'Score 3.0',
     originLabel: 'Burkinabè',
     isPremium: false,
+    isHit: false,
     isMorallyCompliant: true,
     filePath: '',
     committeeRating: 3,
     popularityScore: 3,
     socialScore: 3,
+    validationStatus: 'Pending',
+    validationLabel: 'À valider',
+    isValidated: false,
   }
 }
 
@@ -276,6 +313,11 @@ export const api = {
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   dashboard: () => request<Dashboard>('/api/dashboard'),
   lookups: () => request<Lookups>('/api/lookups'),
+  addLanguage: (label: string) =>
+    request<{ label: string; enumValue: string; code: string }>('/api/languages', {
+      method: 'POST',
+      body: JSON.stringify({ label }),
+    }),
   clips: (q = '', genre = '', language = '', burkinabeOnly = false) => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
@@ -284,11 +326,24 @@ export const api = {
     if (burkinabeOnly) params.set('burkinabeOnly', 'true')
     return request<Clip[]>(`/api/clips?${params}`)
   },
+  clipMedia: async (id: string) => {
+    const token = getToken()
+    const response = await fetch(`/api/clips/${id}/media`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      throw new Error(response.status === 404 ? 'Fichier vidéo introuvable.' : `Erreur ${response.status}`)
+    }
+    return response.blob()
+  },
   createClip: (clip: Clip) =>
     request<Clip>('/api/clips', { method: 'POST', body: JSON.stringify(clip) }),
   updateClip: (clip: Clip) =>
     request<Clip>(`/api/clips/${clip.id}`, { method: 'PUT', body: JSON.stringify(clip) }),
   deleteClip: (id: string) => request<void>(`/api/clips/${id}`, { method: 'DELETE' }),
+  validateClip: (id: string) => request<Clip>(`/api/clips/${id}/validate`, { method: 'PUT' }),
+  rejectClip: (id: string, note = '') =>
+    request<Clip>(`/api/clips/${id}/reject`, { method: 'PUT', body: JSON.stringify({ note }) }),
   clipsCsvUrl: () => '/api/clips.csv',
   importClipsCsv: (csv: string) =>
     request<{ imported: number }>('/api/clips/import', {
@@ -330,6 +385,8 @@ export const api = {
     request<BbdaReport>(`/api/reports/bbda?${bbdaParams(query)}`),
   bbdaCsvUrl: (query: BbdaQuery) =>
     `/api/reports/bbda.csv?${bbdaParams(query)}`,
+  bbdaPdfUrl: (query: BbdaQuery) =>
+    `/api/reports/bbda.pdf?${bbdaParams(query)}`,
   exportUrl: (format: string, date: string) => `/api/export/${format}?date=${date}`,
   security: () => request<SecurityInfo>('/api/security'),
   backup: () => request<{ path: string }>('/api/backup', { method: 'POST' }),
@@ -344,4 +401,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  users: () =>
+    request<{ id: string; fullName: string; userName: string; role: string; isActive: boolean }[]>('/api/users'),
+  impersonate: (id: string) =>
+    request<Session>(`/api/users/${id}/impersonate`, { method: 'POST' }),
 }
