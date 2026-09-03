@@ -1,13 +1,28 @@
 import { useState } from 'react'
 import { api, type Session } from './api'
 
-export default function Login({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
-  const [userName, setUserName] = useState('sara.programmateur')
-  const [password, setPassword] = useState('ProgFaso2026!')
+export default function Login({
+  onSignedIn,
+  theme,
+  onTheme,
+}: {
+  onSignedIn: (session: Session) => void
+  theme: 'dark' | 'light'
+  onTheme: (theme: 'dark' | 'light') => void
+}) {
+  const [userName, setUserName] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
   return (
     <div className="login">
+      <button
+        type="button"
+        className="btn ghost login-theme"
+        onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
+      >
+        {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+      </button>
       <form
         className="card login-card"
         onSubmit={async (event) => {
@@ -21,19 +36,18 @@ export default function Login({ onSignedIn }: { onSignedIn: (session: Session) =
         }}
       >
         <div className="kicker">FILINFO GROUP · RÉGIE</div>
-        <h1>Connexion web</h1>
-        <p className="muted">Mêmes menus que le desktop. Ouvrez http://localhost:5173 — l’API reste en HTTPS.</p>
+        <h1>Connexion</h1>
+        <p className="muted">Saisissez votre identifiant nominatif pour accéder à la régie.</p>
         <div className="field">
           <label htmlFor="user">Identifiant</label>
-          <input id="user" value={userName} onChange={(e) => setUserName(e.target.value)} />
+          <input id="user" value={userName} onChange={(e) => setUserName(e.target.value)} autoComplete="username" />
         </div>
         <div className="field">
           <label htmlFor="pass">Mot de passe</label>
-          <input id="pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input id="pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
         </div>
         {error && <p className="alert">{error}</p>}
-        <button className="btn" type="submit">Entrer</button>
-        <p className="muted">sara.programmateur · ProgFaso2026!</p>
+        <button className="btn" type="submit">Se connecter</button>
       </form>
     </div>
   )

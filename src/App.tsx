@@ -70,6 +70,8 @@ export default function App() {
   if (!session) {
     return (
       <Login
+        theme={theme}
+        onTheme={setTheme}
         onSignedIn={(next) => {
           setToken(next.token)
           setSession(next)
