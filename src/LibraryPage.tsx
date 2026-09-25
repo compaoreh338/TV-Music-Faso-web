@@ -142,7 +142,7 @@ export default function LibraryPage({
             Burkinabè
           </label>
           {!hitsOnlyMode && (
-            <label className="row-check" title="Afficher uniquement les clips Hit (Premium / Hit, ou score d'impact ≥ 4,5)">
+            <label className="row-check" title="Afficher uniquement les clips Hit (case Premium / Hit cochée)">
               <input type="checkbox" checked={hitsOnly} onChange={(e) => setHitsOnly(e.target.checked)} />
               Hits
             </label>
@@ -219,7 +219,7 @@ export default function LibraryPage({
       </div>
 
       {hitsOnlyMode && (
-        <p className="gold">Onglet Hits : titres Premium / Hit (case cochée) ou score d’impact ≥ 4,5. Vous pouvez les consulter, les modifier et les valider ici.</p>
+        <p className="gold">Onglet Hits : titres avec la case Premium / Hit cochée. Vous pouvez les consulter, les modifier et les valider ici.</p>
       )}
       {!canEdit && !hitsOnlyMode && (
         <p className="gold">Consultation seule : l&apos;édition de la médiathèque est réservée aux programmateurs.</p>
@@ -230,39 +230,43 @@ export default function LibraryPage({
         <article className="card">
           <div className="kicker">{hitsOnlyMode ? 'HITS' : 'CATALOGUE'}</div>
           <p className="muted">{clips.length} {hitsOnlyMode ? 'hit(s)' : 'clip(s)'}</p>
-          {canValidate && (
+          {canValidate && pendingClips.length > 0 && (
             <div className="bulk-bar">
               <label className="row-check">
                 <input
                   type="checkbox"
                   checked={allPendingSelected}
-                  disabled={pendingClips.length === 0}
                   onChange={(e) => setSelectedIds(e.target.checked ? pendingClips.map((clip) => clip.id) : [])}
                 />
                 Tout cocher (à valider)
               </label>
               <span className="muted">{selectedIds.length} sélectionné(s)</span>
-              <button
-                type="button"
-                className="icon-btn primary"
-                title="Valider la sélection"
-                aria-label="Valider la sélection"
-                disabled={selectedIds.length === 0}
-                onClick={() => applyBulk('validate')}
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8.2 5.6 13 15 2.4 13.5 1 5.6 10 2.4 6.7z" /></svg>
-              </button>
-              <button
-                type="button"
-                className="icon-btn danger"
-                title="Refuser la sélection"
-                aria-label="Refuser la sélection"
-                disabled={selectedIds.length === 0}
-                onClick={() => applyBulk('reject')}
-              >
-                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.2.4 6 5.2 10.8.4 12 1.6 7.2 6.4 12 11.2 10.8 12.4 6 7.6 1.2 12.4 0 11.2 4.8 6.4 0 1.6z" /></svg>
-              </button>
+              <div className="bulk-bar-actions">
+                <button
+                  type="button"
+                  className="icon-btn primary"
+                  title="Valider la sélection"
+                  aria-label="Valider la sélection"
+                  disabled={selectedIds.length === 0}
+                  onClick={() => applyBulk('validate')}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8.2 5.6 13 15 2.4 13.5 1 5.6 10 2.4 6.7z" /></svg>
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn danger"
+                  title="Refuser la sélection"
+                  aria-label="Refuser la sélection"
+                  disabled={selectedIds.length === 0}
+                  onClick={() => applyBulk('reject')}
+                >
+                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.2.4 6 5.2 10.8.4 12 1.6 7.2 6.4 12 11.2 10.8 12.4 6 7.6 1.2 12.4 0 11.2 4.8 6.4 0 1.6z" /></svg>
+                </button>
+              </div>
             </div>
+          )}
+          {canValidate && pendingClips.length === 0 && (
+            <p className="muted" style={{ margin: '8px 0 12px' }}>Aucun clip à valider dans la liste.</p>
           )}
           <ul className="list">
             {clips.map((clip) => (
@@ -524,10 +528,34 @@ export default function LibraryPage({
                     {lookups?.audiences.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
-                <div className="kicker">SCORE D&apos;IMPACT (HIT SI ≥ 4,5)</div>
-                <div className="field"><label>Note du comité (1–5)</label><input type="number" step="0.1" value={form.committeeRating} onChange={(e) => patch({ committeeRating: Number(e.target.value) })} /></div>
-                <div className="field"><label>Popularité (1–5)</label><input type="number" step="0.1" value={form.popularityScore} onChange={(e) => patch({ popularityScore: Number(e.target.value) })} /></div>
-                <div className="field"><label>Réseaux sociaux (1–5)</label><input type="number" step="0.1" value={form.socialScore} onChange={(e) => patch({ socialScore: Number(e.target.value) })} /></div>
+                <div className="kicker">SCORE D&apos;IMPACT</div>
+                <div className="field"><label>Note du comité (1–5)</label><input type="number" step="0.1" value={form.committeeRating} onChange={(e) => {
+                  const committeeRating = Number(e.target.value)
+                  const impactScore = Math.round(((committeeRating + form.popularityScore + form.socialScore) / 3) * 10) / 10
+                  patch({
+                    committeeRating,
+                    impactScore,
+                    impactLabel: form.isPremium ? `Hit ${impactScore.toFixed(1)}` : `Score ${impactScore.toFixed(1)}`,
+                  })
+                }} /></div>
+                <div className="field"><label>Popularité (1–5)</label><input type="number" step="0.1" value={form.popularityScore} onChange={(e) => {
+                  const popularityScore = Number(e.target.value)
+                  const impactScore = Math.round(((form.committeeRating + popularityScore + form.socialScore) / 3) * 10) / 10
+                  patch({
+                    popularityScore,
+                    impactScore,
+                    impactLabel: form.isPremium ? `Hit ${impactScore.toFixed(1)}` : `Score ${impactScore.toFixed(1)}`,
+                  })
+                }} /></div>
+                <div className="field"><label>Réseaux sociaux (1–5)</label><input type="number" step="0.1" value={form.socialScore} onChange={(e) => {
+                  const socialScore = Number(e.target.value)
+                  const impactScore = Math.round(((form.committeeRating + form.popularityScore + socialScore) / 3) * 10) / 10
+                  patch({
+                    socialScore,
+                    impactScore,
+                    impactLabel: form.isPremium ? `Hit ${impactScore.toFixed(1)}` : `Score ${impactScore.toFixed(1)}`,
+                  })
+                }} /></div>
                 <p className="gold">{form.impactLabel}</p>
                 <label className="row-check"><input type="checkbox" checked={form.isBurkinabe} onChange={(e) => patch({ isBurkinabe: e.target.checked })} /> Clip burkinabè</label>
                 <label className="row-check">
@@ -536,8 +564,8 @@ export default function LibraryPage({
                     checked={form.isPremium}
                     onChange={(e) => patch({
                       isPremium: e.target.checked,
-                      isHit: e.target.checked || form.impactScore >= 4.5,
-                      impactLabel: (e.target.checked || form.impactScore >= 4.5)
+                      isHit: e.target.checked,
+                      impactLabel: e.target.checked
                         ? `Hit ${form.impactScore.toFixed(1)}`
                         : `Score ${form.impactScore.toFixed(1)}`,
                     })}

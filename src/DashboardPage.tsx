@@ -21,7 +21,7 @@ export default function DashboardPage() {
         <p className="alert">Alerte grille du jour : {data.today.sovereignty} % — sous l&apos;objectif de {data.target} %.</p>
       )}
 
-      <div className="grid">
+      <div className="grid grid-kpis">
         <article className="card">
           <div className="kicker">CLIPS</div>
           <div className="metric">{data.library.total}</div>
@@ -44,7 +44,7 @@ export default function DashboardPage() {
         </article>
       </div>
 
-      <div className="grid" style={{ marginTop: 16 }}>
+      <div className="grid grid-pair" style={{ marginTop: 16 }}>
         <article className="card">
           <div className="kicker">STOCK MÉDIATHÈQUE</div>
           <div className={`metric ${data.library.alert ? 'danger' : 'ok'}`}>{data.library.sovereignty} %</div>
@@ -83,7 +83,7 @@ export default function DashboardPage() {
         </article>
       )}
 
-      <div className="grid" style={{ marginTop: 16 }}>
+      <div className="grid grid-pair" style={{ marginTop: 16 }}>
         <article className="card">
           <div className="kicker">LANGUES</div>
           {data.languages.map((row) => (

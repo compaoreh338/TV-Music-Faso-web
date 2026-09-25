@@ -14,6 +14,7 @@ export type PageId =
   | 'account'
 
 export type Session = {
+  id?: string
   token: string
   fullName: string
   userName: string
@@ -46,8 +47,8 @@ export type Lookups = {
 
 export const HIT_THRESHOLD = 4.5
 
-export function isClipHit(clip: Pick<Clip, 'isHit' | 'impactScore' | 'isPremium'>): boolean {
-  return clip.isPremium === true || clip.isHit === true || clip.impactScore >= HIT_THRESHOLD
+export function isClipHit(clip: Pick<Clip, 'isHit' | 'isPremium'>): boolean {
+  return clip.isPremium === true || clip.isHit === true
 }
 
 export function isClipPending(clip: Pick<Clip, 'validationStatus' | 'isValidated'>): boolean {
@@ -405,4 +406,6 @@ export const api = {
     request<{ id: string; fullName: string; userName: string; role: string; isActive: boolean }[]>('/api/users'),
   impersonate: (id: string) =>
     request<Session>(`/api/users/${id}/impersonate`, { method: 'POST' }),
+  deleteUser: (id: string) =>
+    request<{ message: string }>(`/api/users/${id}`, { method: 'DELETE' }),
 }
